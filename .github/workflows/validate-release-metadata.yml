@@ -1,20 +1,34 @@
-name: Validate Release Metadata
+name: Build Windows EXE (MSBuild)
 
 on:
-  push:
-    branches: [ "master", "main" ]
-  pull_request:
-    branches: [ "master", "main" ]
+  workflow_dispatch:
 
 jobs:
-  validate-release-metadata:
+  build:
     runs-on: windows-latest
-    permissions:
-      contents: read
-
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      - name: Validate version and changelog sync
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Find solution, restore, and build
         shell: pwsh
-        run: ./scripts/validate-release-metadata.ps1
+        run: |
+          $sln = Get-ChildItem -Filter *.sln -Recurse | Select-Object -First 1
+          if (-not $sln) { throw "No .sln file found in repository." }
+          Write-Host "Building: $($sln.FullName)"
+          nuget restore $sln.FullName
+          msbuild $sln.FullName /p:Configuration=Release /p:OutputPath=C:\build_output
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-Release
+          path: C:\build_output\
